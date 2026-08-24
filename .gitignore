@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.env
+
+# Data, models, logs and local service volumes
+data/raw/
+data/processed/
+model/artifacts/
+log/*.log
+volumes/
+
+
+# Editors and operating systems
+.vscode/
+.DS_Store
+Thumbs.db
+mlruns/
+.dockerignore
+
+mlartifacts/
+data/reports/
