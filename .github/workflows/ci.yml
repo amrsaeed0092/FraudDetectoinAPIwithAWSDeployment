@@ -51,6 +51,22 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+      
+      - name: Show safe OIDC claims for troubleshooting
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const token = await core.getIDToken("sts.amazonaws.com");
+            const payload = token.split(".")[1];
+            const claims = JSON.parse(
+              Buffer.from(payload, "base64url").toString("utf8")
+            );
+
+            core.notice(`OIDC subject: ${claims.sub}`);
+            core.notice(`OIDC audience: ${claims.aud}`);
+            core.notice(`Repository: ${claims.repository}`);
+            core.notice(`Reference: ${claims.ref}`);
+
 
       - name: Configure AWS credentials through OIDC
         uses: aws-actions/configure-aws-credentials@v5
