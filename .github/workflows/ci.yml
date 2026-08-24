@@ -1,22 +1,24 @@
-name: Continuous Integration
+name: Continuous Integration and ECR Publish
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
-    branches:
-      - main
+    branches: [main]
 
 permissions:
   contents: read
+
+env:
+  AWS_REGION: us-east-2
+  ECR_REPOSITORY: fraud-detection-api
 
 jobs:
   test-and-build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout source code
+      - name: Check out repository
         uses: actions/checkout@v4
 
       - name: Set up Python
@@ -24,20 +26,51 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install backend dependencies
+      - name: Install Python dependencies
         working-directory: backend
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run automated tests
+      - name: Run tests
         working-directory: backend
-        run: |
-          python -m pytest -q
+        run: python -m pytest -q
 
       - name: Build Docker image
+        run: docker build --file backend/Dockerfile --tag fraud-detection-api:ci .
+
+  push-image-to-ecr:
+    needs: test-and-build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials through OIDC
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: arn:aws:iam::625495454913:role/GitHubActionsEcrPushRole
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Sign in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Docker image
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker build \
-            --file backend/Dockerfile \
-            --tag fraud-detection-api:ci \
+          IMAGE_URI=$REGISTRY/$ECR_REPOSITORY
+          docker build --file backend/Dockerfile \
+            --tag $IMAGE_URI:$IMAGE_TAG \
+            --tag $IMAGE_URI:latest \
             .
+          docker push $IMAGE_URI:$IMAGE_TAG
+          docker push $IMAGE_URI:latest
